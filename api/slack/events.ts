@@ -148,10 +148,10 @@ async function handleDirectMessage(event: NonNullable<SlackEventPayload['event']
  */
 function getHelpMessage(): string {
   return `*Available Commands:*
-• \`/projects\` - List all clients
-• \`/projects [client]\` - View project status for a client
-• \`/status [project]\` - View task breakdown for a project
-• \`/sync\` - Sync data from ClickUp
+• \`/mediaprojects\` - List all clients
+• \`/mediaprojects [client]\` - View project status for a client
+• \`/mediastatus [project]\` - View task breakdown for a project
+• \`/mediasync\` - Sync data from ClickUp
 
 *Automatic Notifications:*
 • ✅ Task completions from ClickUp

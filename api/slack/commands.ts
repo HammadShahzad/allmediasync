@@ -76,14 +76,17 @@ async function handleCommand(
 
   switch (normalizedCommand) {
     case '/projects':
+    case '/mediaprojects':
       await handleProjectsCommand(args, channelId, userId);
       break;
 
     case '/status':
+    case '/mediastatus':
       await handleStatusCommand(args, channelId, userId);
       break;
 
     case '/sync':
+    case '/mediasync':
       await handleSyncCommand(channelId, userId);
       break;
 
