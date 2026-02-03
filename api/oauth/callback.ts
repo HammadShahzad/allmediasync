@@ -41,7 +41,12 @@ export default async function handler(
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as {
+        ok: boolean;
+        access_token?: string;
+        team?: { name: string };
+        error?: string;
+      };
 
       if (data.ok) {
         res.status(200).send(`
