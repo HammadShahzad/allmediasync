@@ -31,7 +31,7 @@ export default async function handler(
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: '8260956289187.10424448798805',
-        client_secret: process.env.SLACK_CLIENT_SECRET || '',
+        client_secret: process.env.SLACK_CLIENT_SECRET || 'db4901abe8d79c23d4d335298cf74d36',
         code: code as string,
         redirect_uri: 'https://allmediasync.vercel.app/api/oauth/callback',
       }),
