@@ -1,0 +1,22 @@
+{
+  "name": "slack-sync",
+  "version": "1.0.0",
+  "description": "Custom automation system integrating Slack, ClickUp, and Dropbox",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "tsc",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.0.0",
+    "dropbox": "^10.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vercel/node": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

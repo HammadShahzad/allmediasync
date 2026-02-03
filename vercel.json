@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/**/*.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/webhooks/clickup",
+      "dest": "/api/webhooks/clickup.ts"
+    },
+    {
+      "src": "/api/webhooks/dropbox",
+      "dest": "/api/webhooks/dropbox.ts"
+    },
+    {
+      "src": "/api/slack/commands",
+      "dest": "/api/slack/commands.ts"
+    },
+    {
+      "src": "/api/slack/events",
+      "dest": "/api/slack/events.ts"
+    }
+  ]
+}
