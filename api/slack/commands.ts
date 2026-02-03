@@ -223,23 +223,13 @@ async function handleSyncCommand(
   }
 
   try {
-    // Fetch all spaces to verify connection
+    // Fetch all spaces to verify connection (keep fast)
     const spaces = await getSpaces(teamId);
-    
-    // Count total tasks across all spaces
-    let totalTasks = 0;
-    const spaceSummaries: string[] = [];
-
-    for (const space of spaces) {
-      const tasks = await getTasksFromSpace(space.id, { includeClosed: true });
-      totalTasks += tasks.length;
-      const completed = tasks.filter(t => t.status.type === 'closed').length;
-      spaceSummaries.push(`• ${space.name}: ${tasks.length} tasks (${completed} complete)`);
-    }
+    const spaceSummaries = spaces.map(space => `• ${space.name}`).join('\n');
 
     await sendCommandResponse(responseUrl, channelId, userId, {
       response_type: 'ephemeral',
-      text: `✅ *Sync Complete*\n\nConnected to ClickUp workspace.\n\n*Clients:*\n${spaceSummaries.join('\n')}\n\n*Total Tasks:* ${totalTasks}`,
+      text: `✅ *Sync Complete*\n\nConnected to ClickUp workspace.\n\n*Spaces:*\n${spaceSummaries}\n\nUse \`/mediaprojects [client]\` for details.`,
     });
   } catch (error) {
     console.error('Error handling /sync command:', error);
