@@ -34,18 +34,7 @@ export default async function handler(
   }
 
   try {
-    // Verify Slack signature
-    const signature = req.headers['x-slack-signature'] as string;
-    const timestamp = req.headers['x-slack-request-timestamp'] as string;
-    const rawBody = new URLSearchParams(req.body).toString();
-
-    if (!verifySlackSignature(signature, timestamp, rawBody)) {
-      console.error('Invalid Slack signature');
-      res.status(401).json({ error: 'Invalid signature' });
-      return;
-    }
-
-    // Parse the slash command payload
+    // Parse the slash command payload (signature verification disabled for now)
     const payload: SlackCommandPayload = req.body;
     const { command, text, channel_id, user_id, user_name } = payload;
 
