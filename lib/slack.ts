@@ -33,11 +33,16 @@ export async function postResponseUrlMessage(
     response_type?: 'in_channel' | 'ephemeral';
   }
 ): Promise<void> {
-  await fetch(responseUrl, {
+  const response = await fetch(responseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(message),
   });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`response_url post failed: ${response.status} ${body}`);
+  }
 }
 
 /**

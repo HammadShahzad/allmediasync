@@ -36,7 +36,7 @@ export default async function handler(
 
   try {
     // Parse the slash command payload (signature verification disabled for now)
-    const payload: SlackCommandPayload = req.body;
+    const payload = parseSlashCommandPayload(req.body);
     const { command, text, channel_id, user_id, user_name, response_url } = payload;
 
     console.log(`Received command: ${command} ${text} from @${user_name}`);
@@ -50,6 +50,24 @@ export default async function handler(
     console.error('Error processing Slack command:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+}
+
+function parseSlashCommandPayload(body: VercelRequest['body']): SlackCommandPayload {
+  if (!body) {
+    return {} as SlackCommandPayload;
+  }
+
+  if (typeof body === 'string') {
+    const params = new URLSearchParams(body);
+    return Object.fromEntries(params.entries()) as unknown as SlackCommandPayload;
+  }
+
+  if (Buffer.isBuffer(body)) {
+    const params = new URLSearchParams(body.toString('utf8'));
+    return Object.fromEntries(params.entries()) as unknown as SlackCommandPayload;
+  }
+
+  return body as SlackCommandPayload;
 }
 
 /**
@@ -244,11 +262,19 @@ async function sendCommandResponse(
   message: { response_type?: 'in_channel' | 'ephemeral'; text: string }
 ): Promise<void> {
   if (responseUrl) {
-    await postResponseUrlMessage(responseUrl, message);
-    return;
+    try {
+      await postResponseUrlMessage(responseUrl, message);
+      return;
+    } catch (error) {
+      console.error('Failed to post response_url message:', error);
+    }
   }
 
-  await sendEphemeralResponse(channelId, userId, message.text);
+  try {
+    await sendEphemeralResponse(channelId, userId, message.text);
+  } catch (error) {
+    console.error('Failed to post ephemeral response:', error);
+  }
 }
 
 async function sendCommandError(
