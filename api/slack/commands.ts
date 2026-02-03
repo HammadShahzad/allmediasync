@@ -15,6 +15,7 @@ import {
   getProjectSummary,
   getTasksFromList,
   getTasksFromSpace,
+  getFolders,
 } from '../../lib/clickup';
 
 /**
@@ -44,6 +45,13 @@ export default async function handler(
     // Fast path for /mediasync to respond inline
     if (isSyncCommand(command)) {
       const message = await buildSyncMessage();
+      res.status(200).json({ response_type: 'ephemeral', text: message });
+      return;
+    }
+
+    // Fast path for /mediaprojects to respond inline
+    if (isProjectsCommand(command)) {
+      const message = await buildProjectsMessage(text.trim());
       res.status(200).json({ response_type: 'ephemeral', text: message });
       return;
     }
@@ -257,6 +265,11 @@ function isSyncCommand(command: string): boolean {
   return normalizedCommand === '/sync' || normalizedCommand === '/mediasync';
 }
 
+function isProjectsCommand(command: string): boolean {
+  const normalizedCommand = command.toLowerCase();
+  return normalizedCommand === '/projects' || normalizedCommand === '/mediaprojects';
+}
+
 async function buildSyncMessage(): Promise<string> {
   const teamId = process.env.CLICKUP_TEAM_ID;
 
@@ -268,6 +281,39 @@ async function buildSyncMessage(): Promise<string> {
   const spaceSummaries = spaces.map(space => `• ${space.name}`).join('\n');
 
   return `✅ *Sync Complete*\n\nConnected to ClickUp workspace.\n\n*Spaces:*\n${spaceSummaries}\n\nUse \`/mediaprojects [client]\` for details.`;
+}
+
+async function buildProjectsMessage(clientName: string): Promise<string> {
+  const teamId = process.env.CLICKUP_TEAM_ID;
+
+  if (!teamId) {
+    return '❌ CLICKUP_TEAM_ID not configured';
+  }
+
+  const spaces = await getSpaces(teamId);
+
+  if (!clientName) {
+    const spaceList = spaces.map(s => `• ${s.name}`).join('\n');
+    return `Available clients:\n${spaceList}\n\nUsage: \`/mediaprojects [client name]\``;
+  }
+
+  const space = await findSpaceByName(teamId, clientName);
+  if (!space) {
+    const suggestions = spaces
+      .filter(s => s.name.toLowerCase().includes(clientName.toLowerCase()))
+      .map(s => s.name);
+
+    if (suggestions.length > 0) {
+      return `❌ Client "${clientName}" not found. Did you mean: ${suggestions.join(', ')}?`;
+    }
+
+    return `❌ Client "${clientName}" not found.`;
+  }
+
+  const folders = await getFolders(space.id);
+  const folderList = folders.map(f => `• ${f.name}`).join('\n') || '• (no folders found)';
+
+  return `*${space.name}* folders:\n${folderList}\n\nUse \`/mediastatus [list name]\` for task details.`;
 }
 
 async function sendCommandResponse(
