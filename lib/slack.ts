@@ -23,6 +23,24 @@ export async function postMessage(
 }
 
 /**
+ * Post a message via Slack response_url
+ */
+export async function postResponseUrlMessage(
+  responseUrl: string,
+  message: {
+    text: string;
+    blocks?: SlackBlock[];
+    response_type?: 'in_channel' | 'ephemeral';
+  }
+): Promise<void> {
+  await fetch(responseUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(message),
+  });
+}
+
+/**
  * Post a task completion notification to Slack
  */
 export async function notifyTaskCompleted(
@@ -140,7 +158,8 @@ export async function notifyFileUploaded(
  */
 export async function postProjectSummary(
   summary: ProjectSummary,
-  channel: string = DEFAULT_CHANNEL
+  channel: string = DEFAULT_CHANNEL,
+  responseUrl?: string
 ): Promise<void> {
   const completionPercent = summary.totalTasks > 0
     ? Math.round((summary.completedTasks / summary.totalTasks) * 100)
@@ -205,6 +224,15 @@ export async function postProjectSummary(
     });
   }
 
+  if (responseUrl) {
+    await postResponseUrlMessage(responseUrl, {
+      response_type: 'in_channel',
+      text: `📊 Project status for ${summary.clientName}`,
+      blocks,
+    });
+    return;
+  }
+
   await postMessage(channel, `📊 Project status for ${summary.clientName}`, blocks);
 }
 
@@ -214,7 +242,8 @@ export async function postProjectSummary(
 export async function postTaskList(
   projectName: string,
   tasks: ClickUpTask[],
-  channel: string = DEFAULT_CHANNEL
+  channel: string = DEFAULT_CHANNEL,
+  responseUrl?: string
 ): Promise<void> {
   const completedTasks = tasks.filter(t => t.status.type === 'closed');
   const inProgressTasks = tasks.filter(t => t.status.status.toLowerCase().includes('progress'));
@@ -311,6 +340,15 @@ export async function postTaskList(
         text: completedList + (completedTasks.length > 5 ? `\n_...and ${completedTasks.length - 5} more_` : ''),
       },
     });
+  }
+
+  if (responseUrl) {
+    await postResponseUrlMessage(responseUrl, {
+      response_type: 'in_channel',
+      text: `📋 Task breakdown for ${projectName}`,
+      blocks,
+    });
+    return;
   }
 
   await postMessage(channel, `📋 Task breakdown for ${projectName}`, blocks);

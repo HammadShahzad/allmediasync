@@ -6,6 +6,7 @@ import {
   postTaskList,
   sendError,
   sendEphemeralResponse,
+  postResponseUrlMessage,
 } from '../../lib/slack';
 import {
   getSpaces,
@@ -36,15 +37,15 @@ export default async function handler(
   try {
     // Parse the slash command payload (signature verification disabled for now)
     const payload: SlackCommandPayload = req.body;
-    const { command, text, channel_id, user_id, user_name } = payload;
+    const { command, text, channel_id, user_id, user_name, response_url } = payload;
 
     console.log(`Received command: ${command} ${text} from @${user_name}`);
 
     // Respond immediately to acknowledge (Slack requires response within 3s)
-    res.status(200).json({ response_type: 'in_channel' });
+    res.status(200).json({ response_type: 'ephemeral', text: 'Working on it…' });
 
     // Process the command asynchronously
-    await handleCommand(command, text, channel_id, user_id);
+    await handleCommand(command, text, channel_id, user_id, response_url);
   } catch (error) {
     console.error('Error processing Slack command:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -58,7 +59,8 @@ async function handleCommand(
   command: string,
   text: string,
   channelId: string,
-  userId: string
+  userId: string,
+  responseUrl?: string
 ): Promise<void> {
   const normalizedCommand = command.toLowerCase();
   const args = text.trim();
@@ -66,21 +68,21 @@ async function handleCommand(
   switch (normalizedCommand) {
     case '/projects':
     case '/mediaprojects':
-      await handleProjectsCommand(args, channelId, userId);
+      await handleProjectsCommand(args, channelId, userId, responseUrl);
       break;
 
     case '/status':
     case '/mediastatus':
-      await handleStatusCommand(args, channelId, userId);
+      await handleStatusCommand(args, channelId, userId, responseUrl);
       break;
 
     case '/sync':
     case '/mediasync':
-      await handleSyncCommand(channelId, userId);
+      await handleSyncCommand(channelId, userId, responseUrl);
       break;
 
     default:
-      await sendError(channelId, userId, `Unknown command: ${command}`);
+      await sendCommandError(channelId, userId, responseUrl, `Unknown command: ${command}`);
   }
 }
 
@@ -91,12 +93,13 @@ async function handleCommand(
 async function handleProjectsCommand(
   clientName: string,
   channelId: string,
-  userId: string
+  userId: string,
+  responseUrl?: string
 ): Promise<void> {
   const teamId = process.env.CLICKUP_TEAM_ID;
 
   if (!teamId) {
-    await sendError(channelId, userId, 'CLICKUP_TEAM_ID not configured');
+    await sendCommandError(channelId, userId, responseUrl, 'CLICKUP_TEAM_ID not configured');
     return;
   }
 
@@ -106,11 +109,10 @@ async function handleProjectsCommand(
       const spaces = await getSpaces(teamId);
       const spaceList = spaces.map(s => `• ${s.name}`).join('\n');
 
-      await sendEphemeralResponse(
-        channelId,
-        userId,
-        `Available clients:\n${spaceList}\n\nUsage: \`/projects [client name]\``
-      );
+      await sendCommandResponse(responseUrl, channelId, userId, {
+        response_type: 'ephemeral',
+        text: `Available clients:\n${spaceList}\n\nUsage: \`/mediaprojects [client name]\``,
+      });
       return;
     }
 
@@ -124,23 +126,24 @@ async function handleProjectsCommand(
         .map(s => s.name);
 
       if (suggestions.length > 0) {
-        await sendError(
+        await sendCommandError(
           channelId,
           userId,
+          responseUrl,
           `Client "${clientName}" not found. Did you mean: ${suggestions.join(', ')}?`
         );
       } else {
-        await sendError(channelId, userId, `Client "${clientName}" not found.`);
+        await sendCommandError(channelId, userId, responseUrl, `Client "${clientName}" not found.`);
       }
       return;
     }
 
     // Get project summary and post it
     const summary = await getProjectSummary(space.id, space.name);
-    await postProjectSummary(summary, channelId);
+    await postProjectSummary(summary, channelId, responseUrl);
   } catch (error) {
     console.error('Error handling /projects command:', error);
-    await sendError(channelId, userId, 'Failed to fetch project data. Please try again.');
+    await sendCommandError(channelId, userId, responseUrl, 'Failed to fetch project data. Please try again.');
   }
 }
 
@@ -151,21 +154,21 @@ async function handleProjectsCommand(
 async function handleStatusCommand(
   projectName: string,
   channelId: string,
-  userId: string
+  userId: string,
+  responseUrl?: string
 ): Promise<void> {
   const teamId = process.env.CLICKUP_TEAM_ID;
 
   if (!teamId) {
-    await sendError(channelId, userId, 'CLICKUP_TEAM_ID not configured');
+    await sendCommandError(channelId, userId, responseUrl, 'CLICKUP_TEAM_ID not configured');
     return;
   }
 
   if (!projectName) {
-    await sendEphemeralResponse(
-      channelId,
-      userId,
-      'Usage: `/status [project name]`\nShows detailed task breakdown for a project.'
-    );
+    await sendCommandResponse(responseUrl, channelId, userId, {
+      response_type: 'ephemeral',
+      text: 'Usage: `/mediastatus [project name]`\nShows detailed task breakdown for a project.',
+    });
     return;
   }
 
@@ -185,20 +188,21 @@ async function handleStatusCommand(
     }
 
     if (!foundList || !foundSpace) {
-      await sendError(
+      await sendCommandError(
         channelId,
         userId,
-        `Project "${projectName}" not found. Use \`/projects\` to see available clients and projects.`
+        responseUrl,
+        `Project "${projectName}" not found. Use \`/mediaprojects\` to see available clients and projects.`
       );
       return;
     }
 
     // Get tasks for the list and post them
     const tasks = await getTasksFromList(foundList.id, { includeClosed: true });
-    await postTaskList(foundList.name, tasks, channelId);
+    await postTaskList(foundList.name, tasks, channelId, responseUrl);
   } catch (error) {
     console.error('Error handling /status command:', error);
-    await sendError(channelId, userId, 'Failed to fetch task data. Please try again.');
+    await sendCommandError(channelId, userId, responseUrl, 'Failed to fetch task data. Please try again.');
   }
 }
 
@@ -206,11 +210,15 @@ async function handleStatusCommand(
  * Handle /sync command
  * Forces a refresh of project data (useful for debugging)
  */
-async function handleSyncCommand(channelId: string, userId: string): Promise<void> {
+async function handleSyncCommand(
+  channelId: string,
+  userId: string,
+  responseUrl?: string
+): Promise<void> {
   const teamId = process.env.CLICKUP_TEAM_ID;
 
   if (!teamId) {
-    await sendError(channelId, userId, 'CLICKUP_TEAM_ID not configured');
+    await sendCommandError(channelId, userId, responseUrl, 'CLICKUP_TEAM_ID not configured');
     return;
   }
 
@@ -229,13 +237,38 @@ async function handleSyncCommand(channelId: string, userId: string): Promise<voi
       spaceSummaries.push(`• ${space.name}: ${tasks.length} tasks (${completed} complete)`);
     }
 
-    await sendEphemeralResponse(
-      channelId,
-      userId,
-      `✅ *Sync Complete*\n\nConnected to ClickUp workspace.\n\n*Clients:*\n${spaceSummaries.join('\n')}\n\n*Total Tasks:* ${totalTasks}`
-    );
+    await sendCommandResponse(responseUrl, channelId, userId, {
+      response_type: 'ephemeral',
+      text: `✅ *Sync Complete*\n\nConnected to ClickUp workspace.\n\n*Clients:*\n${spaceSummaries.join('\n')}\n\n*Total Tasks:* ${totalTasks}`,
+    });
   } catch (error) {
     console.error('Error handling /sync command:', error);
-    await sendError(channelId, userId, 'Failed to sync with ClickUp. Check API credentials.');
+    await sendCommandError(channelId, userId, responseUrl, 'Failed to sync with ClickUp. Check API credentials.');
   }
+}
+
+async function sendCommandResponse(
+  responseUrl: string | undefined,
+  channelId: string,
+  userId: string,
+  message: { response_type?: 'in_channel' | 'ephemeral'; text: string }
+): Promise<void> {
+  if (responseUrl) {
+    await postResponseUrlMessage(responseUrl, message);
+    return;
+  }
+
+  await sendEphemeralResponse(channelId, userId, message.text);
+}
+
+async function sendCommandError(
+  channelId: string,
+  userId: string,
+  responseUrl: string | undefined,
+  message: string
+): Promise<void> {
+  await sendCommandResponse(responseUrl, channelId, userId, {
+    response_type: 'ephemeral',
+    text: `❌ ${message}`,
+  });
 }
