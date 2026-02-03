@@ -8,6 +8,14 @@
   ],
   "routes": [
     {
+      "src": "/",
+      "dest": "/api/index.ts"
+    },
+    {
+      "src": "/api/oauth/callback",
+      "dest": "/api/oauth/callback.ts"
+    },
+    {
       "src": "/api/webhooks/clickup",
       "dest": "/api/webhooks/clickup.ts"
     },
