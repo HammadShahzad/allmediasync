@@ -41,6 +41,13 @@ export default async function handler(
 
     console.log(`Received command: ${command} ${text} from @${user_name}`);
 
+    // Fast path for /mediasync to respond inline
+    if (isSyncCommand(command)) {
+      const message = await buildSyncMessage();
+      res.status(200).json({ response_type: 'ephemeral', text: message });
+      return;
+    }
+
     // Respond immediately to acknowledge (Slack requires response within 3s)
     res.status(200).json({ response_type: 'ephemeral', text: 'Working on it…' });
 
@@ -233,26 +240,34 @@ async function handleSyncCommand(
   userId: string,
   responseUrl?: string
 ): Promise<void> {
-  const teamId = process.env.CLICKUP_TEAM_ID;
-
-  if (!teamId) {
-    await sendCommandError(channelId, userId, responseUrl, 'CLICKUP_TEAM_ID not configured');
-    return;
-  }
-
   try {
-    // Fetch all spaces to verify connection (keep fast)
-    const spaces = await getSpaces(teamId);
-    const spaceSummaries = spaces.map(space => `• ${space.name}`).join('\n');
-
+    const message = await buildSyncMessage();
     await sendCommandResponse(responseUrl, channelId, userId, {
       response_type: 'ephemeral',
-      text: `✅ *Sync Complete*\n\nConnected to ClickUp workspace.\n\n*Spaces:*\n${spaceSummaries}\n\nUse \`/mediaprojects [client]\` for details.`,
+      text: message,
     });
   } catch (error) {
     console.error('Error handling /sync command:', error);
     await sendCommandError(channelId, userId, responseUrl, 'Failed to sync with ClickUp. Check API credentials.');
   }
+}
+
+function isSyncCommand(command: string): boolean {
+  const normalizedCommand = command.toLowerCase();
+  return normalizedCommand === '/sync' || normalizedCommand === '/mediasync';
+}
+
+async function buildSyncMessage(): Promise<string> {
+  const teamId = process.env.CLICKUP_TEAM_ID;
+
+  if (!teamId) {
+    return '❌ CLICKUP_TEAM_ID not configured';
+  }
+
+  const spaces = await getSpaces(teamId);
+  const spaceSummaries = spaces.map(space => `• ${space.name}`).join('\n');
+
+  return `✅ *Sync Complete*\n\nConnected to ClickUp workspace.\n\n*Spaces:*\n${spaceSummaries}\n\nUse \`/mediaprojects [client]\` for details.`;
 }
 
 async function sendCommandResponse(
